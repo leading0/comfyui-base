@@ -54,6 +54,17 @@ In your Runpod template settings, set the following environment variables:
 
 Expose only these HTTP ports in the template: **8188** and **8080**. Do not expose 8189, 8081, or 8888.
 
+### Building
+
+This fork builds **on top of the pre-built upstream image** (`runpod/comfyui:latest`), adding only the nginx authentication layer. No CUDA/PyTorch/ComfyUI rebuild is needed — the build takes seconds:
+
+```bash
+docker build -t comfyui-nginx .
+docker run --gpus all -e WEB_PASSWORD=secret -p 8188:8188 -p 8080:8080 comfyui-nginx
+```
+
+To use a specific upstream tag instead of `latest`, change the `FROM` line in `Dockerfile` (e.g. `runpod/comfyui:cuda13.0`).
+
 ## Access
 
 - `8188`: ComfyUI web UI (Basic Auth: `WEB_USERNAME` / `WEB_PASSWORD`)
