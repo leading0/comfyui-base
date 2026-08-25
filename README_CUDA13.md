@@ -8,10 +8,12 @@ If you have an existing pod created with an older version of this template (CUDA
 
 ## Access
 
-- `8188`: ComfyUI web UI
-- `8080`: FileBrowser (admin / adminadmin12)
-- `8888`: JupyterLab (token via `JUPYTER_PASSWORD`, root at `/workspace`)
+- `8188`: ComfyUI web UI (Basic Auth: `WEB_USERNAME` / `WEB_PASSWORD`)
+- `8080`: FileBrowser (Basic Auth: `WEB_USERNAME` / `WEB_PASSWORD`, then admin / `FILEBROWSER_PASSWORD`)
+- `8888`: JupyterLab — **internal only**; access via SSH tunnel
 - `22`: SSH (set `PUBLIC_KEY` or check logs for generated root password)
+
+> See the main README for full nginx/auth configuration details.
 
 ## Pre-installed custom nodes
 

@@ -91,12 +91,12 @@ export_env_vars() {
 # Start Jupyter Lab server for remote access
 start_jupyter() {
     mkdir -p /workspace
-    echo "Starting Jupyter Lab on port 8888..."
+    echo "Starting Jupyter Lab on 127.0.0.1:8888 (internal, not proxied)..."
     nohup jupyter lab \
         --allow-root \
         --no-browser \
         --port=8888 \
-        --ip=0.0.0.0 \
+        --ip=127.0.0.1 \
         --FileContentsManager.delete_to_trash=False \
         --FileContentsManager.preferred_dir=/workspace \
         --ServerApp.root_dir=/workspace \
@@ -184,21 +184,50 @@ fi
 setup_ssh
 export_env_vars
 
+# ---- nginx Basic Auth setup ----
+setup_auth() {
+    echo "Setting up nginx Basic Auth..."
+
+    if [ -z "$WEB_PASSWORD" ]; then
+        echo "ERROR: WEB_PASSWORD environment variable is required."
+        echo "       Set it in your RunPod template environment variables."
+        echo "       Aborting startup."
+        exit 1
+    fi
+
+    WEB_USERNAME="${WEB_USERNAME:-admin}"
+    htpasswd -bc /etc/nginx/.htpasswd "$WEB_USERNAME" "$WEB_PASSWORD"
+    chmod 644 /etc/nginx/.htpasswd
+    echo "Basic Auth configured for user: $WEB_USERNAME"
+}
+
+start_nginx() {
+    echo "Starting nginx reverse proxy..."
+    nginx -t
+    nginx
+    echo "nginx started (8188 -> ComfyUI, 8080 -> FileBrowser)"
+}
+
+setup_auth
+
 # Initialize FileBrowser if not already done
 if [ ! -f "$DB_FILE" ]; then
     echo "Initializing FileBrowser..."
     filebrowser config init
-    filebrowser config set --address 0.0.0.0
-    filebrowser config set --port 8080
+    filebrowser config set --address 127.0.0.1
+    filebrowser config set --port 8081
     filebrowser config set --root /workspace
     filebrowser config set --auth.method=json
     filebrowser users add admin "${FILEBROWSER_PASSWORD:-adminadmin12}" --perm.admin
 else
     echo "Using existing FileBrowser configuration..."
+    # Re-apply bind address/port in case of upgrade from old config
+    filebrowser config set --address 127.0.0.1
+    filebrowser config set --port 8081
 fi
 
 # Start FileBrowser
-echo "Starting FileBrowser on port 8080..."
+echo "Starting FileBrowser on 127.0.0.1:8081 (proxied via nginx on 8080)..."
 nohup filebrowser &> /filebrowser.log &
 
 start_jupyter
@@ -281,9 +310,12 @@ fi
 echo "Warming up pip (Manager timeout is 5s)..."
 time python -m pip --version
 
+# Start nginx reverse proxy (before ComfyUI so auth is in place)
+start_nginx
+
 # Start ComfyUI — keep container alive if it crashes so SSH/Jupyter remain accessible
 cd $COMFYUI_DIR
-FIXED_ARGS="--listen 0.0.0.0 --port 8188 --enable-cors-header"
+FIXED_ARGS="--listen 127.0.0.1 --port 8189 --enable-cors-header"
 if [ -s "$ARGS_FILE" ]; then
     CUSTOM_ARGS=$(grep -v '^#' "$ARGS_FILE" | tr '\n' ' ')
     if [ ! -z "$CUSTOM_ARGS" ]; then
@@ -310,13 +342,15 @@ if [ "$SHUTTING_DOWN" = "1" ]; then
     # they exit cleanly instead of waiting for SIGKILL.
     pkill -TERM -f "jupyter-lab" 2>/dev/null || true
     pkill -TERM -x "filebrowser" 2>/dev/null || true
+    nginx -s quit 2>/dev/null || true
     exit 0
 fi
 
 echo "============================================="
 echo "  ComfyUI exited unexpectedly (exit code $COMFY_EXIT)."
 echo "  Check the logs above for the error/traceback."
-echo "  SSH and JupyterLab are still available."
+echo "  SSH is still available. JupyterLab is internal-only."
+echo "  nginx proxy is still running."
 echo "  To restart after fixing:"
 echo "    cd $COMFYUI_DIR && source .venv-cu128/bin/activate"
 echo "    python main.py $FIXED_ARGS"

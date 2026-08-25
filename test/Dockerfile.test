@@ -1,0 +1,29 @@
+"""
+Lightweight test harness for the nginx auth proxy.
+Simulates the start.sh auth setup + nginx config without needing the full CUDA image.
+
+Usage:
+  docker build -t comfyui-nginx-test -f test/Dockerfile.test .
+  docker run --rm -e WEB_PASSWORD=testpass comfyui-nginx-test
+"""
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    nginx \
+    apache2-utils \
+    python3 \
+    curl \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Copy nginx config
+COPY nginx/nginx.conf /etc/nginx/nginx.conf
+
+# Copy test script and mock backend
+COPY test/start_test.sh /start_test.sh
+COPY test/mock_backend.py /mock_backend.py
+RUN chmod +x /start_test.sh
+
+ENTRYPOINT ["/start_test.sh"]

@@ -175,6 +175,8 @@ RUN apt-get update && \
     iputils-ping \
     procps \
     openssl \
+    nginx \
+    apache2-utils \
     ffmpeg \
     rsync \
     && wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb \
@@ -231,8 +233,11 @@ RUN sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/
 RUN mkdir -p /workspace/runpod-slim
 WORKDIR /workspace/runpod-slim
 
-# Expose ports
-EXPOSE 8188 22 8888 8080
+# Expose ports (nginx proxies ComfyUI on 8188 and FileBrowser on 8080)
+EXPOSE 8188 22 8080
+
+# Copy nginx reverse proxy config
+COPY nginx/nginx.conf /etc/nginx/nginx.conf
 
 # Copy start script
 COPY start.sh /start.sh
